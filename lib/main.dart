@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:todo_list/todo.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const TodoListApp());
@@ -15,155 +15,88 @@ class TodoListApp extends StatefulWidget {
 class _TodoListAppState extends State<TodoListApp> {
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       home: MainRoute(),
     );
   }
 }
 
-class MainRoute extends StatelessWidget {
-  MainRoute({
-    super.key,
-  });
-
-  final List<Todo> todos = [
-    Todo(title: "Ceci est un titre ", description: "Ceci est une description"),
-    Todo(title: "Ceci est un deuxième titre", description: "Ceci est une deuxième description"),
-  ];
-
-  List<TodoListTile> buildTodoList() {
-    List<TodoListTile> tiles = [];
-    for (var i = 0; i < todos.length; i++) {
-      Todo todo = todos[i];
-      todo.isCompleted = true;
-      tiles.add(TodoListTile(title: todo.title, subtitle: todo.description, todos: todos, todoIndex: i, ));
-    }
-    return tiles;
-  }
-
-  void displayTodo(Todo todo) {
-    print("Titre: ${todo.title}, Description ${todo.description}, isCompleted: ${todo.isCompleted}, dueDate: ${todo.dueDate}");
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Tâches"),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(15.0),
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                children: buildTodoList(),
-              ),
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.add),
-        label: const Text("Créer une nouvelle tâche"),
-        onPressed: () {
-          Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const CreateTodoRoute())
-          );
-        }
-      ),
-    );
-  }
-}
-
-class CreateTodoRoute extends StatefulWidget {
-  const CreateTodoRoute({
+class MainRoute extends StatefulWidget {
+  const MainRoute({
     super.key,
   });
 
   @override
-  State<CreateTodoRoute> createState() => _CreateTodoRouteState();
+  State<MainRoute> createState() => _MainRouteState();
 }
 
-class _CreateTodoRouteState extends State<CreateTodoRoute> {
+class _MainRouteState extends State<MainRoute> {
+  final todoController = TextEditingController();
 
-  final todoNameController = TextEditingController();
-  final todoDescriptionController = TextEditingController();
-  DateTime? todoDueDateValue;
-
+  @override
+  void dispose() {
+    // On clean le controller quand on le retire
+    todoController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Créer une nouvelle tâche"),
-      ),
-      body: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
-              child: TextField(
-                controller: todoNameController,
-                decoration: const InputDecoration(
-                  hintText: "Tâche à réaliser"
-                ),
+      return FutureBuilder<List<TodoListTile>>(
+        future: TodoService.buildTodoList(),
+        builder: (context, AsyncSnapshot<List<TodoListTile>> snapshot) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text("Tâches"),
+            ),
+            body: Padding(
+              padding: const EdgeInsets.all(15.0),
+              child: Column(
+                children: [
+                  TextFormField(
+                    controller: todoController,
+                    decoration: const InputDecoration(
+                      hintText: "Nom de la tâche"
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView(
+                      children: snapshot.data ?? [],
+                    ),
+                  ),
+                ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
-              child: TextField(
-                controller: todoDescriptionController,
-                decoration: const InputDecoration(
-                  fillColor: Colors.red,
-                  hintText: "Description de la tâche à réaliser"
-                ),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(left: 20, right: 20),
-              child: Text(
-                "Date d'échéance",
-                style: TextStyle(
-                  fontWeight: FontWeight.w700
-                ),
-              ),
-            ),
-            CalendarDatePicker(
-              initialDate: DateTime.now(),
-              firstDate: DateTime.now(),
-              lastDate: DateTime(2100),
-              onDateChanged: (value) {
-                print(value);
-                todoDueDateValue = value;
+            floatingActionButton: FloatingActionButton(
+              child: const Icon(Icons.add),
+              onPressed: () {
+                if (todoController.value.text != "") {
+                  TodoService.addTodo(todoController.value.text);
+                
+                  const snackBar = SnackBar(
+                    content: Text('Une tâche à été ajoutée avec succès à la liste'),
+                  );
+            
+                  ScaffoldMessenger.of(context).showSnackBar(snackBar);
+                }
+
+                setState(() {});
               }
             ),
-            Center(
-              child: FloatingActionButton(
-                child: const Icon(Icons.add),
-                onPressed: () {
-                  print("Nouvelle tâche: ${todoNameController.value.text}, Description: ${todoDescriptionController.value.text}, Échéance: $todoDueDateValue");
-                }
-              ),
-            )
-          ],
-        ),
-    );
+          );
+        }
+      );
   }
 }
 
 class TodoListTile extends StatefulWidget {
   final String title;
-  final String subtitle;
-  final int todoIndex;
-  final List<Todo> todos;
+  bool isCompleted;
 
-  const TodoListTile({
+  TodoListTile({
     super.key,
     required this.title,
-    required this.subtitle,
-    required this.todoIndex,
-    required this.todos
+    required this.isCompleted
   });
 
   @override
@@ -172,38 +105,88 @@ class TodoListTile extends StatefulWidget {
 
 class _TodoListTileState extends State<TodoListTile> {
 
-  void displayTodo(Todo todo) {
-    print("Titre: ${todo.title}, Description ${todo.description}, isCompleted: ${todo.isCompleted}, dueDate: ${todo.dueDate}");
-  }
-
   @override
   Widget build(BuildContext context) {
-    Todo t = widget.todos[widget.todoIndex];
-    displayTodo(t);
+    return Dismissible(
+      key: ValueKey<Key>(widget.key ?? Key("key-${DateTime.now()}")),
+      onDismissed: (DismissDirection direction) {
+        TodoService.removeTodo(widget.title);
 
-    return ListTile(      
-      leading: Checkbox(
-        value: widget.todos[widget.todoIndex].isCompleted,
-        onChanged: (value) => {
-          setState(() {
-           widget.todos[widget.todoIndex].isCompleted = !widget.todos[widget.todoIndex].isCompleted;
-          })
-        },
+        const snackBar = SnackBar(
+          content: Text("Une tâche a été supprimé avec succès"),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(snackBar);
+      },
+      background: Container(
+        color: Colors.redAccent,
       ),
-      title: Text(
-        widget.title.toString(),
-        style: TextStyle(
-          decoration: widget.todos[widget.todoIndex].isCompleted ? TextDecoration.lineThrough : null,
-          color: widget.todos[widget.todoIndex].isCompleted ? Colors.grey : null
+      child: ListTile(      
+        leading: Checkbox(
+          value: widget.isCompleted,
+          onChanged: (value) async {
+            await TodoService.updateTodo(widget.title, !widget.isCompleted);
+            setState(() {
+              widget.isCompleted = !widget.isCompleted;
+            });
+          },
         ),
-      ),
-      subtitle: Text(
-        widget.subtitle.toString(),
-        style: TextStyle(
-          decoration: widget.todos[widget.todoIndex].isCompleted ? TextDecoration.lineThrough : null,
-          color: widget.todos[widget.todoIndex].isCompleted ? Colors.grey : null
+        title: Text(
+          widget.title.toString(),
+          style: TextStyle(
+            decoration: widget.isCompleted ? TextDecoration.lineThrough : null,
+            color: widget.isCompleted ? Colors.grey : null
+          ),
         ),
       ),
     );
+  }
+}
+
+class TodoService {
+  static Future<List<TodoListTile>> buildTodoList() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    // on crée une nouvelle liste de widget tâches
+    List<TodoListTile> tiles = [];
+    // on récupère la liste des todos existants
+    final List<String>? todos = prefs.getStringList("todos");
+    // on récupère la longueur de cette liste de todos
+    final int todosLength = todos?.length ?? 0;
+    for (var i = 0; i < todosLength; i++) {
+      String todo = todos?[i] ?? "";
+      final bool? isCompleted = prefs.getBool(todo);
+      // on ajoute la tile dans la liste des wigdgets
+      tiles.add(TodoListTile(title: todo, isCompleted: isCompleted ?? false,));
+    }
+    return tiles;
+  }
+
+  static Future<void> removeTodo(String todo) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    // on récupère tous les todos 
+    List<String>? todos = prefs.getStringList("todos");
+    // on supprime le todo de la liste
+    todos?.remove(todo);
+    // on supprime le todo et son état
+    await prefs.remove(todo);
+    // on met à jour la liste de tous les todos
+    await prefs.setStringList("todos", todos ?? []);
+  }
+
+  static Future<void> addTodo(String todo) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    // on récupère tous les todos 
+    List<String> todos = prefs.getStringList("todos") ?? [];
+    // on ajoute le todo à la liste des todos
+    todos.add(todo);
+    // on met à jour les todos de manière globale
+    await prefs.setStringList("todos", todos);
+    // on met à jour seulement le todo correspondant
+    await prefs.setBool(todo, false);
+  }
+
+  static Future<void> updateTodo(String todo, bool isCompleted) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    // on met à jour le todo correspondant
+    await prefs.setBool(todo, isCompleted);
   }
 }
