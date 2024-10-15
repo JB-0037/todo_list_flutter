@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 
 void main() {
-  runApp(const TodoListApp());
+  runApp(ChangeNotifierProvider(
+      create: (context) => TodoListModel(), child: const TodoListApp()));
 }
 
 class TodoListApp extends StatefulWidget {
@@ -16,21 +17,21 @@ class _TodoListAppState extends State<TodoListApp> {
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
-      home: MainRoute(),
+      home: TodoList(),
     );
   }
 }
 
-class MainRoute extends StatefulWidget {
-  const MainRoute({
+class TodoList extends StatefulWidget {
+  const TodoList({
     super.key,
   });
 
   @override
-  State<MainRoute> createState() => _MainRouteState();
+  State<TodoList> createState() => _TodoListState();
 }
 
-class _MainRouteState extends State<MainRoute> {
+class _TodoListState extends State<TodoList> {
   final todoController = TextEditingController();
 
   @override
@@ -42,75 +43,68 @@ class _MainRouteState extends State<MainRoute> {
 
   @override
   Widget build(BuildContext context) {
-      return FutureBuilder<List<TodoListTile>>(
-        future: TodoService.buildTodoList(),
-        builder: (context, AsyncSnapshot<List<TodoListTile>> snapshot) {
-          return Scaffold(
-            appBar: AppBar(
-              title: const Text("Tâches"),
+    final todolist = Provider.of<TodoListModel>(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Tâches"),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(15.0),
+        child: Column(
+          children: [
+            TextFormField(
+              controller: todoController,
+              decoration: const InputDecoration(hintText: "Nom de la tâche"),
             ),
-            body: Padding(
-              padding: const EdgeInsets.all(15.0),
-              child: Column(
-                children: [
-                  TextFormField(
-                    controller: todoController,
-                    decoration: const InputDecoration(
-                      hintText: "Nom de la tâche"
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView(
-                      children: snapshot.data ?? [],
-                    ),
-                  ),
-                ],
+            Expanded(
+              child: ListView(
+                children: todolist.todos
+                    .map((t) => TodoListTile(
+                        title: t.title, isCompleted: t.isCompleted))
+                    .toList(),
               ),
             ),
-            floatingActionButton: FloatingActionButton(
-              child: const Icon(Icons.add),
-              onPressed: () {
-                if (todoController.value.text != "") {
-                  TodoService.addTodo(todoController.value.text);
-                
-                  const snackBar = SnackBar(
-                    content: Text('Une tâche à été ajoutée avec succès à la liste'),
-                  );
-            
-                  ScaffoldMessenger.of(context).showSnackBar(snackBar);
-                }
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+          child: const Icon(Icons.add),
+          onPressed: () {
+            if (todoController.value.text != "") {
+              todolist.addTodo(Todo(title: todoController.value.text));
 
-                setState(() {});
-              }
-            ),
-          );
-        }
-      );
+              const snackBar = SnackBar(
+                content: Text('Une tâche à été ajoutée avec succès à la liste'),
+              );
+
+              ScaffoldMessenger.of(context).showSnackBar(snackBar);
+            }
+          }),
+    );
   }
 }
 
 class TodoListTile extends StatefulWidget {
   final String title;
-  bool isCompleted;
+  final bool isCompleted;
 
-  TodoListTile({
-    super.key,
-    required this.title,
-    required this.isCompleted
-  });
+  const TodoListTile(
+      {super.key, required this.title, required this.isCompleted});
 
   @override
   State<TodoListTile> createState() => _TodoListTileState();
 }
 
 class _TodoListTileState extends State<TodoListTile> {
-
   @override
   Widget build(BuildContext context) {
+    final todolist = Provider.of<TodoListModel>(context);
+
     return Dismissible(
       key: ValueKey<Key>(widget.key ?? Key("key-${DateTime.now()}")),
       onDismissed: (DismissDirection direction) {
-        TodoService.removeTodo(widget.title);
+        todolist.removeTodo(widget.title);
 
         const snackBar = SnackBar(
           content: Text("Une tâche a été supprimé avec succès"),
@@ -120,73 +114,50 @@ class _TodoListTileState extends State<TodoListTile> {
       background: Container(
         color: Colors.redAccent,
       ),
-      child: ListTile(      
+      child: ListTile(
         leading: Checkbox(
           value: widget.isCompleted,
-          onChanged: (value) async {
-            await TodoService.updateTodo(widget.title, !widget.isCompleted);
-            setState(() {
-              widget.isCompleted = !widget.isCompleted;
-            });
+          onChanged: (value) {
+            todolist.updateTodo(widget.title, !widget.isCompleted);
           },
         ),
         title: Text(
-          widget.title.toString(),
+          widget.title,
           style: TextStyle(
-            decoration: widget.isCompleted ? TextDecoration.lineThrough : null,
-            color: widget.isCompleted ? Colors.grey : null
-          ),
+              decoration:
+                  widget.isCompleted ? TextDecoration.lineThrough : null,
+              color: widget.isCompleted ? Colors.grey : null),
         ),
       ),
     );
   }
 }
 
-class TodoService {
-  static Future<List<TodoListTile>> buildTodoList() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    // on crée une nouvelle liste de widget tâches
-    List<TodoListTile> tiles = [];
-    // on récupère la liste des todos existants
-    final List<String>? todos = prefs.getStringList("todos");
-    // on récupère la longueur de cette liste de todos
-    final int todosLength = todos?.length ?? 0;
-    for (var i = 0; i < todosLength; i++) {
-      String todo = todos?[i] ?? "";
-      final bool? isCompleted = prefs.getBool(todo);
-      // on ajoute la tile dans la liste des wigdgets
-      tiles.add(TodoListTile(title: todo, isCompleted: isCompleted ?? false,));
-    }
-    return tiles;
+class Todo {
+  String title;
+
+  bool isCompleted;
+
+  Todo({required this.title, this.isCompleted = false});
+}
+
+class TodoListModel with ChangeNotifier {
+  List<Todo> _todos = [];
+
+  List<Todo> get todos => _todos;
+
+  void addTodo(Todo todo) {
+    _todos.add(todo);
+    notifyListeners();
   }
 
-  static Future<void> removeTodo(String todo) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    // on récupère tous les todos 
-    List<String>? todos = prefs.getStringList("todos");
-    // on supprime le todo de la liste
-    todos?.remove(todo);
-    // on supprime le todo et son état
-    await prefs.remove(todo);
-    // on met à jour la liste de tous les todos
-    await prefs.setStringList("todos", todos ?? []);
+  void removeTodo(String title) {
+    _todos.removeWhere((t) => t.title == title);
+    notifyListeners();
   }
 
-  static Future<void> addTodo(String todo) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    // on récupère tous les todos 
-    List<String> todos = prefs.getStringList("todos") ?? [];
-    // on ajoute le todo à la liste des todos
-    todos.add(todo);
-    // on met à jour les todos de manière globale
-    await prefs.setStringList("todos", todos);
-    // on met à jour seulement le todo correspondant
-    await prefs.setBool(todo, false);
-  }
-
-  static Future<void> updateTodo(String todo, bool isCompleted) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    // on met à jour le todo correspondant
-    await prefs.setBool(todo, isCompleted);
+  void updateTodo(String title, bool isCompleted) {
+    _todos = _todos.map((t) => t.title == title ? Todo(title: title, isCompleted: isCompleted) : t).toList();
+    notifyListeners();
   }
 }
