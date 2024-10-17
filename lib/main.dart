@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:todo_list/todo.dart';
+import 'package:provider/provider.dart';
 
 void main() {
-  runApp(const TodoListApp());
+  runApp(ChangeNotifierProvider(
+      create: (context) => TodoListModel(), child: const TodoListApp()));
 }
 
 class TodoListApp extends StatefulWidget {
@@ -15,38 +16,35 @@ class TodoListApp extends StatefulWidget {
 class _TodoListAppState extends State<TodoListApp> {
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: MainRoute(),
+    return const MaterialApp(
+      home: TodoList(),
     );
   }
 }
 
-class MainRoute extends StatelessWidget {
-  MainRoute({
+class TodoList extends StatefulWidget {
+  const TodoList({
     super.key,
   });
 
-  final List<Todo> todos = [
-    Todo(title: "Ceci est un titre ", description: "Ceci est une description"),
-    Todo(title: "Ceci est un deuxième titre", description: "Ceci est une deuxième description"),
-  ];
+  @override
+  State<TodoList> createState() => _TodoListState();
+}
 
-  List<TodoListTile> buildTodoList() {
-    List<TodoListTile> tiles = [];
-    for (var i = 0; i < todos.length; i++) {
-      Todo todo = todos[i];
-      todo.isCompleted = true;
-      tiles.add(TodoListTile(title: todo.title, subtitle: todo.description, todos: todos, todoIndex: i, ));
-    }
-    return tiles;
-  }
+class _TodoListState extends State<TodoList> {
+  final todoController = TextEditingController();
 
-  void displayTodo(Todo todo) {
-    print("Titre: ${todo.title}, Description ${todo.description}, isCompleted: ${todo.isCompleted}, dueDate: ${todo.dueDate}");
+  @override
+  void dispose() {
+    // On clean le controller quand on le retire
+    todoController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final todolist = Provider.of<TodoListModel>(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Tâches"),
@@ -55,155 +53,111 @@ class MainRoute extends StatelessWidget {
         padding: const EdgeInsets.all(15.0),
         child: Column(
           children: [
+            TextFormField(
+              controller: todoController,
+              decoration: const InputDecoration(hintText: "Nom de la tâche"),
+            ),
             Expanded(
               child: ListView(
-                children: buildTodoList(),
+                children: todolist.todos
+                    .map((t) => TodoListTile(
+                        title: t.title, isCompleted: t.isCompleted))
+                    .toList(),
               ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.add),
-        label: const Text("Créer une nouvelle tâche"),
-        onPressed: () {
-          Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const CreateTodoRoute())
-          );
-        }
-      ),
-    );
-  }
-}
+      floatingActionButton: FloatingActionButton(
+          child: const Icon(Icons.add),
+          onPressed: () {
+            if (todoController.value.text != "") {
+              todolist.addTodo(Todo(title: todoController.value.text));
 
-class CreateTodoRoute extends StatefulWidget {
-  const CreateTodoRoute({
-    super.key,
-  });
+              const snackBar = SnackBar(
+                content: Text('Une tâche à été ajoutée avec succès à la liste'),
+              );
 
-  @override
-  State<CreateTodoRoute> createState() => _CreateTodoRouteState();
-}
-
-class _CreateTodoRouteState extends State<CreateTodoRoute> {
-
-  final todoNameController = TextEditingController();
-  final todoDescriptionController = TextEditingController();
-  DateTime? todoDueDateValue;
-
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Créer une nouvelle tâche"),
-      ),
-      body: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
-              child: TextField(
-                controller: todoNameController,
-                decoration: const InputDecoration(
-                  hintText: "Tâche à réaliser"
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
-              child: TextField(
-                controller: todoDescriptionController,
-                decoration: const InputDecoration(
-                  fillColor: Colors.red,
-                  hintText: "Description de la tâche à réaliser"
-                ),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(left: 20, right: 20),
-              child: Text(
-                "Date d'échéance",
-                style: TextStyle(
-                  fontWeight: FontWeight.w700
-                ),
-              ),
-            ),
-            CalendarDatePicker(
-              initialDate: DateTime.now(),
-              firstDate: DateTime.now(),
-              lastDate: DateTime(2100),
-              onDateChanged: (value) {
-                print(value);
-                todoDueDateValue = value;
-              }
-            ),
-            Center(
-              child: FloatingActionButton(
-                child: const Icon(Icons.add),
-                onPressed: () {
-                  print("Nouvelle tâche: ${todoNameController.value.text}, Description: ${todoDescriptionController.value.text}, Échéance: $todoDueDateValue");
-                }
-              ),
-            )
-          ],
-        ),
+              ScaffoldMessenger.of(context).showSnackBar(snackBar);
+            }
+          }),
     );
   }
 }
 
 class TodoListTile extends StatefulWidget {
   final String title;
-  final String subtitle;
-  final int todoIndex;
-  final List<Todo> todos;
+  final bool isCompleted;
 
-  const TodoListTile({
-    super.key,
-    required this.title,
-    required this.subtitle,
-    required this.todoIndex,
-    required this.todos
-  });
+  const TodoListTile(
+      {super.key, required this.title, required this.isCompleted});
 
   @override
   State<TodoListTile> createState() => _TodoListTileState();
 }
 
 class _TodoListTileState extends State<TodoListTile> {
-
-  void displayTodo(Todo todo) {
-    print("Titre: ${todo.title}, Description ${todo.description}, isCompleted: ${todo.isCompleted}, dueDate: ${todo.dueDate}");
-  }
-
   @override
   Widget build(BuildContext context) {
-    Todo t = widget.todos[widget.todoIndex];
-    displayTodo(t);
+    final todolist = Provider.of<TodoListModel>(context);
 
-    return ListTile(      
-      leading: Checkbox(
-        value: widget.todos[widget.todoIndex].isCompleted,
-        onChanged: (value) => {
-          setState(() {
-           widget.todos[widget.todoIndex].isCompleted = !widget.todos[widget.todoIndex].isCompleted;
-          })
-        },
+    return Dismissible(
+      key: ValueKey<Key>(widget.key ?? Key("key-${DateTime.now()}")),
+      onDismissed: (DismissDirection direction) {
+        todolist.removeTodo(widget.title);
+
+        const snackBar = SnackBar(
+          content: Text("Une tâche a été supprimé avec succès"),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(snackBar);
+      },
+      background: Container(
+        color: Colors.redAccent,
       ),
-      title: Text(
-        widget.title.toString(),
-        style: TextStyle(
-          decoration: widget.todos[widget.todoIndex].isCompleted ? TextDecoration.lineThrough : null,
-          color: widget.todos[widget.todoIndex].isCompleted ? Colors.grey : null
+      child: ListTile(
+        leading: Checkbox(
+          value: widget.isCompleted,
+          onChanged: (value) {
+            todolist.updateTodo(widget.title, !widget.isCompleted);
+          },
         ),
-      ),
-      subtitle: Text(
-        widget.subtitle.toString(),
-        style: TextStyle(
-          decoration: widget.todos[widget.todoIndex].isCompleted ? TextDecoration.lineThrough : null,
-          color: widget.todos[widget.todoIndex].isCompleted ? Colors.grey : null
+        title: Text(
+          widget.title,
+          style: TextStyle(
+              decoration:
+                  widget.isCompleted ? TextDecoration.lineThrough : null,
+              color: widget.isCompleted ? Colors.grey : null),
         ),
       ),
     );
+  }
+}
+
+class Todo {
+  String title;
+
+  bool isCompleted;
+
+  Todo({required this.title, this.isCompleted = false});
+}
+
+class TodoListModel with ChangeNotifier {
+  List<Todo> _todos = [];
+
+  List<Todo> get todos => _todos;
+
+  void addTodo(Todo todo) {
+    _todos.add(todo);
+    notifyListeners();
+  }
+
+  void removeTodo(String title) {
+    _todos.removeWhere((t) => t.title == title);
+    notifyListeners();
+  }
+
+  void updateTodo(String title, bool isCompleted) {
+    _todos = _todos.map((t) => t.title == title ? Todo(title: title, isCompleted: isCompleted) : t).toList();
+    notifyListeners();
   }
 }
